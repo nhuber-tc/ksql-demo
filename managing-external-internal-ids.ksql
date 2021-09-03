@@ -1,0 +1,41 @@
+-- Stream of all events from whatever external system exists
+CREATE STREAM EXTERNAL_SOURCE (
+    ID INT KEY,
+    NAME VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.external_source', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+-- Table for internal representation, must be keyed by the exteral ID for now
+-- This would be tagged as internal and not meant for outside consuming
+CREATE TABLE INTERNAL_SOURCE (
+    ID VARCHAR,
+    EXTERNAL_ID INT PRIMARY KEY,
+    NAME VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.internal_source', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+-- When an event comes in with a previously unseen external ID create a new internal ID, otherwise just update the internal record
+CREATE STREAM EXTERNAL_SOURCE_CREATOR WITH (
+    KAFKA_TOPIC = '_demo.internal_source', -- this is the same topic as for TABLE INTERNAL_SOURCE 
+    VALUE_FORMAT = 'AVRO'
+) AS SELECT
+    CASE
+        WHEN I.EXTERNAL_ID IS NULL THEN UUID()
+        ELSE I.ID
+    END AS ID,
+    E.ID AS EXTERNAL_ID,
+    E.NAME AS NAME
+FROM EXTERNAL_SOURCE E
+LEFT JOIN INTERNAL_SOURCE I ON I.EXTERNAL_ID = E.ID
+EMIT CHANGES;
+
+
+-- The final table, keyed by our internal ID but gets updated by the external source
+CREATE TABLE INTERNAL_SOURCE_BY_ID
+WITH (KAFKA_TOPIC='_demo.internal_source.1', VALUE_FORMAT='AVRO')
+AS SELECT 
+    ID,
+    EXTERNAL_ID,
+    NAME
+FROM INTERNAL_SOURCE
+EMIT CHANGES;

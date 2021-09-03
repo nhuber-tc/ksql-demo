@@ -1,0 +1,1 @@
+This is just a collection of some of the ksqlDB scenarios I played through from a presentation.

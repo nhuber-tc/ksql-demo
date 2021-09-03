@@ -1,0 +1,40 @@
+-- SOME_INTENT is a request or command or something that we know will have 2 side
+-- effect events. We want to know when they are both completed.
+
+-- A_AND_B_COMPLETED will get an entry whenever both of these events have been
+-- marked as COMPLETED by whatever manages them.
+
+CREATE stream SOME_INTENT
+(
+    ID INT KEY,
+    DESCRIPTION VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.some_intent', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+CREATE STREAM EVENT_A
+(
+    INTENT_ID INT KEY,
+    STATE VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.event_a', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+CREATE STREAM EVENT_B
+(
+    INTENT_ID INT KEY,
+    STATE VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.event_b', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+CREATE STREAM A_AND_B_COMPLETED
+WITH (KAFKA_TOPIC='_demo.events_a_b_completed', VALUE_FORMAT='AVRO')
+    AS SELECT
+        ID,
+        A.STATE AS A_STATE,
+        B.STATE AS B_STATE
+    FROM SOME_INTENT S
+        INNER JOIN EVENT_A A WITHIN 2 HOURS ON A.INTENT_ID = S.ID
+        INNER JOIN EVENT_B B WITHIN 2 HOURS ON B.INTENT_ID = S.ID
+    WHERE A.STATE = 'COMPLETED'
+        AND B.STATE = 'COMPLETED'
+    PARTITION BY ID
+;

@@ -1,0 +1,33 @@
+-- Join in anything from table B into table A. Any changes to a B that relates to
+-- an A creates a new record in the topic '_demo.a_b_joined'
+
+CREATE TABLE DEMO_A
+(
+    ID INT PRIMARY KEY,
+    B_ID INT,
+    NAME VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.A', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+CREATE TABLE DEMO_B
+(
+    ID INT PRIMARY KEY,
+    NAME VARCHAR
+)
+WITH (KAFKA_TOPIC='_demo.B', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1);
+
+CREATE TABLE A_B_JOINED
+WITH (KAFKA_TOPIC='_demo.a_b_joined', VALUE_FORMAT='AVRO', PARTITIONS=1, REPLICAS=1)
+ AS
+    SELECT
+        A.ID AS A_ID,
+        B.ID AS B_ID,
+        A.NAME AS A_NAME,
+        B.NAME AS B_NAME
+    FROM DEMO_A A
+        INNER JOIN DEMO_B B ON A.B_ID = B.ID
+EMIT CHANGES;
+
+INSERT INTO DEMO_A (ID, B_ID, NAME) VALUES(1, 1024, 'some a');
+INSERT INTO DEMO_B (ID, NAME) VALUES(1024, 'some b');
+SELECT * FROM A_B_JOINED;
